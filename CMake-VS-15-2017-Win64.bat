@@ -9,7 +9,7 @@ IF EXIST "Project" rd "Project" /s /q
 md Project
 cd Project
 @echo Run CMake Script
-cmake -DBUILD_PLAYER=ON -G "Visual Studio 15 2017 Win64" ..\
+cmake -DBUILD_PLAYER=ON -DBUILD_RUNTIME=ON -G "Visual Studio 15 2017 Win64" ..\
 
 @echo:
 @echo Solution created in %~dp0\Project

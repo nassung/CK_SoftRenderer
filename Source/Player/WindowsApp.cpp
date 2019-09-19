@@ -4,6 +4,7 @@
 
 #include "WindowsPrecompiled.h"
 #include "Res/resource.h"
+#include "SoftRenderer.h"
 
 static HWND hMainWnd;
 static HMENU hMenu;
@@ -26,13 +27,22 @@ static void UpdateMenuStatus();
 
 void UpdateMenuStatus()
 {
-	//CheckMenuRadioItem(hSubRenderMenu, IDM_2D, IDM_3DPERSP, IDM_2D, MF_BYCOMMAND);
-	//CheckMenuRadioItem(hSubRenderMenu, IDM_2D, IDM_3DPERSP, IDM_3DPERSP, MF_BYCOMMAND);
+	if (SoftRenderer::Inst().GetRenderMode() == SoftRenderer::RenderMode::TWO)
+	{
+		CheckMenuRadioItem(hSubRenderMenu, IDM_2D, IDM_3DPERSP, IDM_2D, MF_BYCOMMAND);
+	}
+	else if (SoftRenderer::Inst().GetRenderMode() == SoftRenderer::RenderMode::THREE_PERSP)
+	{
+		CheckMenuRadioItem(hSubRenderMenu, IDM_2D, IDM_3DPERSP, IDM_3DPERSP, MF_BYCOMMAND);
+	}
+	else
+	{
+		CheckMenuRadioItem(hSubRenderMenu, IDM_2D, IDM_3DPERSP, IDM_2D, MF_BYCOMMAND);
+	}
 }
 
 int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nCmdShow) 
 {
-	//const HCURSOR hcurSave = ::SetCursor(LoadCursor(0, IDC_WAIT));
 	::LoadString(hInstance, IDS_APP_TITLE, szTitle, SIZEOF(szTitle));
 
 	InitInstance(hInstance, lpCmdLine, nCmdShow);
@@ -43,6 +53,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 	hSettingMenu = ::GetSubMenu(hMenu, 1);
 	hSubRenderMenu = ::GetSubMenu(hSettingMenu, 0);
 
+	SoftRenderer::Inst().SetRenderMode(SoftRenderer::RenderMode::TWO);
 	UpdateMenuStatus();
 
 	double prevShowTitleSec = 0;
@@ -54,10 +65,15 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCm
 			break;
 		}
 
-		float frameFPS = 0.f;
-		float averageFPS = 0.f;
-		_stprintf_s(szFullTitle, "%s Current : %.2fFPS Average : %.2fFPS", szTitle, frameFPS, averageFPS);
-		::SetWindowText(hMainWnd, szFullTitle);
+		float currentTime = SoftRenderer::Inst().GetElapsedTime();
+		if (currentTime - prevShowTitleSec > 0.1)
+		{
+			float frameFPS = SoftRenderer::Inst().GetFrameFPS();
+			float averageFPS = SoftRenderer::Inst().GetAverageFPS();
+			_stprintf_s(szFullTitle, "%s Current : %.2fFPS Average : %.2fFPS", szTitle, frameFPS, averageFPS);
+			::SetWindowText(hMainWnd, szFullTitle);
+			prevShowTitleSec = currentTime;
+		}
 	}
 
 	ShutdownInstance();
@@ -85,11 +101,13 @@ static void InitInstance(HINSTANCE hInstance, LPCTSTR lpCmdLine, int nCmdShow)
 
 static HWND CreateAppWindow(const TCHAR *title, const TCHAR *classname, int width, int height, bool fullscreen) 
 {
+	DisplaySetting::Inst().SetSize(ScreenPoint(800, 600));
+
 	RECT rect;
 	rect.left = 0;
 	rect.top = 0;
-	rect.right = 800 - 1;
-	rect.bottom = 600 - 1;
+	rect.right = DisplaySetting::Inst().GetSize().X - 1;
+	rect.bottom = DisplaySetting::Inst().GetSize().Y - 1;
 	AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, false);
 	int WindowWidth = rect.right - rect.left + 1;
 	int WindowHeight = rect.bottom - rect.top + 1;
@@ -101,12 +119,14 @@ static HWND CreateAppWindow(const TCHAR *title, const TCHAR *classname, int widt
 	::ShowWindow(hwnd, SW_SHOW);
 	::SetForegroundWindow(hwnd);
 	::SetFocus(hwnd);
+	SoftRenderer::Inst().Initialize();
 
 	return hwnd;
 }
 
 static void DestroyAppWindow(HWND hwnd) 
 {
+	SoftRenderer::Inst().Shutdown();
 	::DestroyWindow(hwnd);
 }
 
@@ -161,9 +181,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 			DialogBox((HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE), MAKEINTRESOURCE(IDD_ABOUTBOX), hwnd, About);
 			break;
 		case IDM_2D:
+			SoftRenderer::Inst().SetRenderMode(SoftRenderer::RenderMode::TWO);
 			UpdateMenuStatus();
 			break;
 		case IDM_3DPERSP:
+			SoftRenderer::Inst().SetRenderMode(SoftRenderer::RenderMode::THREE_PERSP);
 			UpdateMenuStatus();
 			break;
 		case IDM_EXIT:
@@ -194,8 +216,10 @@ static bool LoopInstance()
 		}
 	}
 
-	// Set Update Login Here.
-	Sleep(10);
+	// Set Update Logic Here.
+	SoftRenderer::Inst().PreUpdate();
+	SoftRenderer::Inst().Update();
+	SoftRenderer::Inst().PostUpdate();
 
 	return true;
 }
